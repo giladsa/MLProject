@@ -1,0 +1,73 @@
+Practical Machine Learning - Project Summary
+============================================
+
+## Overview:
+The project aims to predict the manner in which participants did "Weight Lifting Exercise".
+
+## Processing
+The first stage is loading the training dataset, spliting it to 2 subsets - one for creating the model and another subset for checking the accuracy of the model.
+```{r results='hide' ,message=FALSE, warning=FALSE}
+library(caret)
+setwd("D://docs//studying//Coursera//ML")
+url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+#download.file(url,destfile="pml-training.csv") #no need to download the file when compiling the Knit, since it is already in the workspace
+training <-read.csv("pml-training.csv",header=TRUE,na.strings = c("", "NA"))
+sampleIndex <- createDataPartition(training$classe,times=1,p=0.75,list=FALSE)
+sample <- training[sampleIndex,2:length(names(training))]
+
+featurePlot(x=sample[,1:7],y=sample$classe,plot="pairs")
+
+```
+
+After some attempts to fit a good model and based on the course forum, i came into conclusion to remove the columns with have many missing values and those that are related to the way the experiment was made (all presented in the chart above).
+
+```{r , warning=FALSE}
+countNa <- sort(apply(training,2,function(column) {sum(is.na(column))}))
+onlyColumnWithoutNa <- countNa[countNa ==0]
+columnNames <- names(onlyColumnWithoutNa)
+selectedColumns <- columnNames[8:length(columnNames)] # remove X and user name and other attributes that relate to the way the experiment made
+sample.selectedColumns <- sample[,selectedColumns]
+```
+## Modeling
+
+Fit a random forest model with cross validation of 10-fold. I have checked other approach such as boot632 and tried to also run a PCA, yet all the other approach yieled worst results
+```{r message=FALSE, , warning=FALSE}
+rf_model_cv2<-train(classe~.,data=sample.selectedColumns,method="rf",trControl=trainControl(method="cv"),prox=TRUE)
+```
+### Model Details:
+```{r}
+rf_model_cv2
+plot(varImp(rf_model_cv2,type=2))
+```
+
+The model error rate and the confusion matrix for the 5 "classe"s:
+```{r}
+rf_model_cv2$finalModel
+```
+
+Checking the model with the remaining part of the training data:
+```{r}
+traingTest <- training[-sampleIndex,]
+traingTest.selectedColumns <- traingTest[,selectedColumns]
+pred <- predict(rf_model_cv2,traingTest.selectedColumns)
+confusionMatrix(traingTest.selectedColumns$classe,pred)
+```
+
+## Predicting the classe attribute of the testing data
+```{r}
+testFileName <-"pml-testing.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+#download.file(testUrl,destfile=testFileName)
+testing <-read.csv(testFileName,header=TRUE,na.strings = c("", "NA"))
+selectedColumnsWithoutClasse <- selectedColumns[1:length(selectedColumns)-1]
+testingData <- testing[,selectedColumnsWithoutClasse]
+predTesting <- predict(rf_model_cv2,testingData)
+```
+
+The 20 predicted values:
+```{r}
+predTesting
+```
+
+## Summary:
+The random forest algorithm yields a high predication accuracy and a low error rate. The RF includes a cross validation check.
